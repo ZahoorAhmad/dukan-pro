@@ -870,7 +870,7 @@ const Sales = ({ products, setProducts, customers, setCustomers, sales, setSales
                 }
             });
 
-            // If transaction succeeds, update React state
+            // If the transaction succeeds, update React state
             setSales(prev => [newSale, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
 
             setProducts(prevProducts => {
