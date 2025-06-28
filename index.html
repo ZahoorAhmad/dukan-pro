@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dukaan Pro - POS & Inventory</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* A simple scrollbar style for dark themes */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; /* slate-800 */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; /* slate-600 */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; /* slate-500 */
+        }
+    </style>
+    <script type="importmap">
+        {
+          "imports": {
+            "react": "https://esm.sh/react@^19.1.0",
+            "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+            "react/": "https://esm.sh/react@^19.1.0/",
+            "dexie": "https://esm.sh/dexie@^4.0.7",
+            "dexie-react-hooks": "https://esm.sh/dexie-react-hooks@^1.1.7"
+          }
+        }
+    </script>
+    <!-- Add Babel to transpile JSX on the fly -->
+    <script src="https://unpkg.com/@babel/standalone@7.24.9/babel.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-300">
+<div id="root"></div>
+<!-- Load the main app script, using text/babel type for on-the-fly transpilation -->
+<script type="text/babel" data-type="module" src="./index.tsx"></script>
+</body>
+</html>
