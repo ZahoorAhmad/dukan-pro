@@ -2,6 +2,14 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Product, Customer, Supplier, Sale, SaleItem, View } from './types.ts';
 import { db } from './db.ts';
 import Dexie from 'dexie';
+import {
+    type AuthUser,
+    captureTokenFromURL,
+    clearToken,
+    decodeUser,
+    discoverAndLogin,
+    getToken,
+} from './auth.ts';
 
 // =================================================================================
 // 1. HELPER FUNCTIONS & CUSTOM HOOK
@@ -1045,10 +1053,113 @@ const Reports = ({ sales, customers, products }: { sales: Sale[], customers: Cus
 
 
 // =================================================================================
-// 5. MAIN APP COMPONENT
+// 5. AUTH COMPONENTS
+// =================================================================================
+
+const LoginView = ({ onAuthenticated }: { onAuthenticated: (user: AuthUser) => void }) => {
+    const [email, setEmail] = useState('');
+    const [domain, setDomain] = useState('');
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        const token = captureTokenFromURL() || getToken();
+        if (token) {
+            const user = decodeUser(token);
+            if (user) {
+                onAuthenticated(user);
+                return;
+            }
+            clearToken();
+        }
+    }, [onAuthenticated]);
+
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        setError('');
+        setIsLoading(true);
+
+        try {
+            const message = await discoverAndLogin(email.trim(), domain.trim());
+            if (message) {
+                setError(message);
+                setIsLoading(false);
+            }
+        } catch (submitError) {
+            console.error(submitError);
+            setError('Failed to discover SAML configuration');
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+            <div className="w-full max-w-md bg-slate-800 rounded-xl shadow-2xl p-8 border border-slate-700">
+                <div className="text-center mb-8">
+                    <h1 className="text-3xl font-bold text-white">Dukaan Pro</h1>
+                    <p className="text-slate-400 mt-2">Sign in with your organization SSO</p>
+                </div>
+
+                {error && (
+                    <div className="mb-4 rounded-md bg-red-900/40 border border-red-700 px-4 py-3 text-sm text-red-200">
+                        {error}
+                    </div>
+                )}
+
+                <form className="space-y-4" onSubmit={handleSubmit}>
+                    <div>
+                        <label className="block text-sm text-slate-300 mb-2" htmlFor="email">Work Email</label>
+                        <Input
+                            id="email"
+                            type="email"
+                            placeholder="you@dev-tenant.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="text-center text-slate-500 text-sm">OR</div>
+
+                    <div>
+                        <label className="block text-sm text-slate-300 mb-2" htmlFor="domain">Organization Domain</label>
+                        <Input
+                            id="domain"
+                            type="text"
+                            placeholder="dev-tenant.com"
+                            value={domain}
+                            onChange={(e) => setDomain(e.target.value)}
+                        />
+                    </div>
+
+                    <Button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-60"
+                    >
+                        {isLoading ? 'Discovering...' : 'Continue with SSO'}
+                    </Button>
+                </form>
+
+                <div className="mt-6 rounded-md bg-slate-900/70 border border-slate-700 p-4 text-sm text-slate-300">
+                    <p className="font-medium text-white mb-2">Demo domains</p>
+                    <ul className="list-disc list-inside space-y-1">
+                        <li>dev-tenant.com</li>
+                        <li>example.com</li>
+                        <li>company.com</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// =================================================================================
+// 6. MAIN APP COMPONENT
 // =================================================================================
 
 export const App = () => {
+    const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+    const [authReady, setAuthReady] = useState(false);
     const [activeView, setActiveView] = useState<View>('dashboard');
     const [products, setProducts] = useState<Product[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
@@ -1057,6 +1168,25 @@ export const App = () => {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
+        const token = captureTokenFromURL() || getToken();
+        if (token) {
+            const user = decodeUser(token);
+            if (user) {
+                setAuthUser(user);
+            } else {
+                clearToken();
+            }
+        }
+        setAuthReady(true);
+    }, []);
+
+    useEffect(() => {
+        if (!authUser) {
+            return;
+        }
+
+        setIsLoading(true);
+
         const loadData = async () => {
             try {
                 const [productsData, customersData, suppliersData, salesData] = await Promise.all([
@@ -1077,7 +1207,17 @@ export const App = () => {
             }
         };
         loadData();
-    }, []);
+    }, [authUser]);
+
+    const handleLogout = () => {
+        clearToken();
+        setAuthUser(null);
+        setProducts([]);
+        setCustomers([]);
+        setSuppliers([]);
+        setSales([]);
+        setIsLoading(false);
+    };
 
     const renderView = () => {
         switch(activeView) {
@@ -1100,6 +1240,18 @@ export const App = () => {
         { view: 'reports', label: 'Reports', icon: <BarChartIcon /> },
     ];
 
+    if (!authReady) {
+        return (
+            <div className="flex h-screen w-screen items-center justify-center bg-slate-900 text-white">
+                <p className="text-lg">Checking session...</p>
+            </div>
+        );
+    }
+
+    if (!authUser) {
+        return <LoginView onAuthenticated={setAuthUser} />;
+    }
+
     if (isLoading) {
         return (
             <div className="flex h-screen w-screen items-center justify-center bg-slate-900 text-white">
@@ -1117,8 +1269,9 @@ export const App = () => {
     return (
         <div className="flex h-screen bg-slate-900 text-white">
             <nav className="w-64 bg-slate-800 p-4 flex flex-col shadow-lg">
-                <div className="text-2xl font-bold text-white mb-8 text-center">Dukaan Pro</div>
-                <ul className="space-y-2">
+                <div className="text-2xl font-bold text-white mb-2 text-center">Dukaan Pro</div>
+                <div className="text-xs text-slate-400 text-center mb-6 px-2 break-all">{authUser.email}</div>
+                <ul className="space-y-2 flex-1">
                     {navItems.map(item => (
                         <li key={item.view}>
                             <a
@@ -1134,6 +1287,9 @@ export const App = () => {
                         </li>
                     ))}
                 </ul>
+                <Button onClick={handleLogout} className="mt-4 w-full bg-slate-700 hover:bg-slate-600 text-white">
+                    Logout
+                </Button>
             </nav>
             <main className="flex-1 p-6 md:p-8 lg:p-10 overflow-y-auto">
                 {renderView()}
